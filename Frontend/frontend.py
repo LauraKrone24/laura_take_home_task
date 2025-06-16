@@ -28,6 +28,7 @@ LLM_Chain = None
 my_retriever = None
 
 def setup_ollama():
+    # Pullling needed models in Ollama Container using the API
     ollama_client = ollama.Client(host =os.environ['BASE_URL_OLLAMA_CONTAINER'] )
     print("Setting up Ollama...")
     ollama_client.pull(os.environ['MODELL'])
@@ -39,6 +40,7 @@ def setup_ollama():
 def create_retriever():
     docs = []
     ids = []
+    # Read files and convert to documents
     for file in os.listdir("./text_files"):
         with open("./text_files/"+file, 'r') as open_file:
             text = open_file.read().replace("\n", " ")
@@ -47,7 +49,7 @@ def create_retriever():
             id= doc.metadata["document_name"]
             ids.append(id)
 
-
+    # Setup for parent document retrieval 
     parent_splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap = 200)
     child_splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap = 100)
     embedding_function = OllamaEmbeddings(model=os.environ["EMBEDDING_MODELL"])
@@ -65,21 +67,24 @@ def create_retriever():
         parent_splitter=parent_splitter,
     )
 
+    # Add documents to vectorstore using the parent document retriever
     retriever.add_documents(docs)
 
     return retriever
 
 def retrieve_context(dict): 
-    print(dict)
+    # Find fitting context
     global my_retriever
     documents = my_retriever.invoke(dict["question"])     
     return {"context": format_context(documents), "question": dict["question"], "history_text":dict["history_text"]}
 
 def create_llmchain():
 
+    # Setup Ollama object for generative modell
     ollama = Ollama(model=os.environ["MODELL"] )
     ollama.base_url= os.environ['BASE_URL_OLLAMA_CONTAINER']
 
+    # Prompt Design based on question, context and chathistory 
     prompt_template = ChatPromptTemplate.from_messages([
                 HumanMessagePromptTemplate(
                     prompt=PromptTemplate(
@@ -89,6 +94,7 @@ def create_llmchain():
                     )
                 )])
 
+    # LLM Chain for RAG 
     llmchain  = (
         {"question": RunnablePassthrough()|format_question, "history_text":RunnablePassthrough()|format_history}
         | RunnableLambda(retrieve_context)
@@ -100,18 +106,20 @@ def create_llmchain():
     return llmchain
 
 def generate_response(message, history):
-    global LLM_Chain
-
+    
+    # convert the latest messages into a chathistory
     if len(history)>10:
-            history = history[:-9]
+        history = history[:-9]
     history_text = str(history).strip('[]')
-    history_text = re.sub(r"<span class=\".{3,6}\">Kontextscore: \d\.\d*<\/span>", "", history_text)
+    
 
+    # Invoke LLMChain to generate response
+    global LLM_Chain
     response = LLM_Chain.invoke({
         "question": message,
         "history_text": history_text,
     })
-    
+
     return response
 
 def main():
