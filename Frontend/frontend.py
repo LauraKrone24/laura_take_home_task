@@ -18,11 +18,15 @@ from langchain.prompts.chat import ChatPromptTemplate
 from my_helpers import *
 import os
 import regex as re
+
 print(os.environ['MODELL'])
 print(os.environ['EMBEDDING_MODELL'])
 print(os.environ['BASE_URL_OLLAMA_CONTAINER'])
+
+
 LLM_Chain = None
 my_retriever = None
+
 def setup_ollama():
     ollama_client = ollama.Client(host =os.environ['BASE_URL_OLLAMA_CONTAINER'] )
     print("Setting up Ollama...")
@@ -32,7 +36,6 @@ def setup_ollama():
     print("Pulled embedding model")
     
     
-
 def create_retriever():
     docs = []
     ids = []
@@ -54,14 +57,13 @@ def create_retriever():
             collection_name="take_home_collection",
             embedding_function= embedding_function
         )
-    store = InMemoryStore()  # could be changed if out of memory 
+    store = InMemoryStore() 
     retriever = ParentDocumentRetriever(
         vectorstore=vectorstore,
         docstore=store,
         child_splitter=child_splitter,
         parent_splitter=parent_splitter,
     )
-
 
     retriever.add_documents(docs)
 
@@ -94,18 +96,22 @@ def create_llmchain():
         | ollama
         | StrOutputParser()
     )
+
     return llmchain
 
 def generate_response(message, history):
     global LLM_Chain
+
     if len(history)>10:
             history = history[:-9]
     history_text = str(history).strip('[]')
     history_text = re.sub(r"<span class=\".{3,6}\">Kontextscore: \d\.\d*<\/span>", "", history_text)
+
     response = LLM_Chain.invoke({
         "question": message,
         "history_text": history_text,
     })
+    
     return response
 
 def main():
